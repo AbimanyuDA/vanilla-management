@@ -18,7 +18,6 @@ function createPrismaClient(): PrismaClient {
 
   return new PrismaClient({
     adapter,
-    // @ts-expect-error — log option type differs between Prisma 7 and older types
     log:
       process.env.NODE_ENV === "development"
         ? ["query", "error", "warn"]
