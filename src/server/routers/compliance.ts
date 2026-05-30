@@ -61,7 +61,7 @@ export const complianceRouter = router({
       return { success: true };
     }),
 
-  // GET /api/compliance/freight-rates
+  // GET /api/compliance/freight-rates — available routes for UI dropdown
   getFreightRates: protectedProcedure
     .input(
       z.object({
@@ -70,7 +70,6 @@ export const complianceRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      // TODO Task 15: implement
       return ctx.db.freightRate.findMany({
         where: {
           ...(input.destinationCountry && { destinationCountry: input.destinationCountry }),
@@ -80,11 +79,11 @@ export const complianceRouter = router({
       });
     }),
 
-  // POST /api/compliance/costing/calculate
+  // GET /api/compliance/costing/calculate — query (not mutation) for auto-recalculate support
+  // Property 14: FOB = domestic.subtotal, CFR = FOB + freight.oceanFreightRate, CIF = CFR + marineInsurance
   calculateCost: protectedProcedure
     .input(CostingInputSchema)
-    .mutation(async ({ ctx, input }) => {
-      // TODO Task 15: implement full FOB→CIF calculation using freight rates from DB
+    .query(async ({ ctx, input }) => {
       const freightRate = await ctx.db.freightRate.findFirst({
         where: {
           destinationCountry: input.destinationCountry,
@@ -93,37 +92,71 @@ export const complianceRouter = router({
         orderBy: { updatedAt: "desc" },
       });
 
+      // Requirement 6.7: when rate is unavailable, return structured error with alternative routes
       if (!freightRate) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: `Tarif Ocean Freight untuk rute ${input.destinationCountry} (${input.containerType}) tidak tersedia`,
+        // Find other container types for the same country
+        const sameCountryRates = await ctx.db.freightRate.findMany({
+          where: { destinationCountry: input.destinationCountry },
+          select: { containerType: true, rateUsd: true, destinationPort: true },
         });
+
+        // Find nearest countries with available rates
+        const nearbyCountries = await ctx.db.freightRate.findMany({
+          distinct: ["destinationCountry"],
+          select: { destinationCountry: true, destinationPort: true },
+          where: { containerType: input.containerType },
+          take: 4,
+        });
+
+        return {
+          available: false as const,
+          message: `Tarif Ocean Freight untuk rute ${input.destinationCountry} (${input.containerType}) tidak tersedia`,
+          alternatives: {
+            containerTypes: sameCountryRates.map((r) => ({
+              containerType: r.containerType,
+              rateUsd: r.rateUsd,
+              destinationPort: r.destinationPort,
+            })),
+            nearbyCountries: nearbyCountries
+              .map((r) => r.destinationCountry)
+              .filter((c) => c !== input.destinationCountry),
+          },
+        };
       }
 
-      // Placeholder calculation — replaced by real formula in Task 15
+      // ── FOB→CIF calculation (Requirement 6.2, 6.3, Property 14) ──────────
+      //   Domestic (FOB-origin)  → subtotal = FOB
+      //   Freight                → CFR = FOB + oceanFreight
+      //   Destination            → CIF = CFR + marineInsurance
+
+      // Domestic cost components (Requirement 6.2)
       const vanillaHPP = input.hppPerKg * input.volumeKg;
-      const dryingCost = vanillaHPP * 0.05;
-      const vacuumPackagingCost = input.volumeKg * 2;
-      const truckToPortCost = 500;
-      const emklCost = 300;
-      const localDocumentCost = 150;
+      const dryingCost = vanillaHPP * 0.05;           // 5% of HPP for drying
+      const vacuumPackagingCost = input.volumeKg * 2; // $2/kg for vacuum packaging
+      const truckToPortCost = 500;                    // fixed trucking to Tanjung Priok
+      const emklCost = 300;                           // EMKL / undername
+      const localDocumentCost = 150;                  // phytosanitary + export docs
       const domesticSubtotal =
         vanillaHPP + dryingCost + vacuumPackagingCost + truckToPortCost + emklCost + localDocumentCost;
 
+      // Freight cost components
       const oceanFreightRate = freightRate.rateUsd;
-      const marineInsurance = domesticSubtotal * 0.005;
+      const marineInsurance = domesticSubtotal * 0.005; // 0.5% of cargo value
       const freightSubtotal = oceanFreightRate + marineInsurance;
 
-      const importDuty = domesticSubtotal * 0.05;
-      const portTax = 200;
-      const customsClearance = 350;
+      // Destination cost components (estimates — vary by country)
+      const importDuty = domesticSubtotal * 0.05;    // avg 5% import duty
+      const portTax = 200;                           // port handling fee
+      const customsClearance = 350;                  // customs broker fee
       const destinationSubtotal = importDuty + portTax + customsClearance;
 
-      const fob = domesticSubtotal;
-      const cfr = fob + oceanFreightRate;
-      const cif = cfr + marineInsurance;
+      // Property 14: FOB ≤ CFR ≤ CIF invariant
+      const fob = domesticSubtotal;                  // FOB = all domestic costs
+      const cfr = fob + oceanFreightRate;            // CFR = FOB + ocean freight
+      const cif = cfr + marineInsurance;             // CIF = CFR + insurance
 
       return {
+        available: true as const,
         input,
         domestic: {
           vanillaHPP,

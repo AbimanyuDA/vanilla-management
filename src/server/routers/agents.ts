@@ -5,19 +5,25 @@ import { AgentType, RunStatus } from "@/generated/prisma/enums";
 export const agentsRouter = router({
   // GET agent status for all three agents
   getAgentStatus: protectedProcedure.query(async ({ ctx }) => {
-    // TODO Task 17: implement — return latest run per agent with derived isActive flag
-    const latestRuns = await Promise.all(
+    const agentStatuses = await Promise.all(
       Object.values(AgentType).map(async (agentType) => {
+        // Get the most recent run (any status)
         const latest = await ctx.db.agentRunLog.findFirst({
           where: { agentType },
           orderBy: { startedAt: "desc" },
         });
+
+        // Get the most recent successful run separately
+        const latestSuccess = await ctx.db.agentRunLog.findFirst({
+          where: { agentType, status: RunStatus.SUCCESS },
+          orderBy: { startedAt: "desc" },
+        });
+
         return {
           agentType,
           isActive: latest?.status === RunStatus.RUNNING,
           lastRunAt: latest?.startedAt ?? null,
-          lastSuccessAt:
-            latest?.status === RunStatus.SUCCESS ? latest.completedAt : null,
+          lastSuccessAt: latestSuccess?.completedAt ?? null,
           lastError:
             latest?.status === RunStatus.FAILED
               ? (latest.errorMessage ?? undefined)
@@ -25,7 +31,7 @@ export const agentsRouter = router({
         };
       })
     );
-    return latestRuns;
+    return agentStatuses;
   }),
 
   // GET run log history for a specific agent

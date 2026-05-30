@@ -271,6 +271,31 @@ async function main() {
       rateUsd: 5400,
       validFrom: new Date("2025-01-01"),
     },
+    // South Korea (Busan)
+    {
+      originPort: "Tanjung Priok",
+      destinationPort: "Busan",
+      destinationCountry: "South Korea",
+      containerType: "20ft",
+      rateUsd: 1200,
+      validFrom: new Date("2025-01-01"),
+    },
+    {
+      originPort: "Tanjung Priok",
+      destinationPort: "Busan",
+      destinationCountry: "South Korea",
+      containerType: "40ft",
+      rateUsd: 2200,
+      validFrom: new Date("2025-01-01"),
+    },
+    {
+      originPort: "Tanjung Priok",
+      destinationPort: "Busan",
+      destinationCountry: "South Korea",
+      containerType: "LCL",
+      rateUsd: 85,
+      validFrom: new Date("2025-01-01"),
+    },
   ];
 
   for (const rate of freightRates) {
