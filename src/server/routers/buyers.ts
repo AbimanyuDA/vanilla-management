@@ -20,27 +20,43 @@ function getResendClient(): Resend | null {
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 export const buyersRouter = router({
-  // GET /api/buyers?country=&sector=&score_min=&score_max=
+  // GET /api/buyers?country=&sector=&score_min=&score_max= — Requirement 3.4
   getBuyers: protectedProcedure
     .input(
       z.object({
         country: z.string().optional(),
         sector: z.nativeEnum(BuyerSector).optional(),
+        // Numeric bounds (UI sliders / API consumers)
         scoreMin: z.number().min(0).max(100).optional(),
         scoreMax: z.number().min(0).max(100).optional(),
+        // Named tiers for filter chip UI
+        scoreRange: z.enum(["all", "high", "medium", "low"]).optional(),
       })
     )
     .query(async ({ ctx, input }) => {
-      // TODO Task 11: implement with proper filter composition
+      // Resolve score bounds — named range takes precedence over raw numbers
+      let scoreMin = input.scoreMin;
+      let scoreMax = input.scoreMax;
+      if (input.scoreRange === "high") {
+        scoreMin = 70; scoreMax = undefined;
+      } else if (input.scoreRange === "medium") {
+        scoreMin = 40; scoreMax = 69;
+      } else if (input.scoreRange === "low") {
+        scoreMin = undefined; scoreMax = 39;
+      }
+
       return ctx.db.buyer.findMany({
         where: {
-          ...(input.country && { country: input.country }),
+          // Case-insensitive substring match on country (Requirement 3.4)
+          ...(input.country && {
+            country: { contains: input.country, mode: "insensitive" },
+          }),
           ...(input.sector && { sector: input.sector }),
-          ...(input.scoreMin !== undefined || input.scoreMax !== undefined
+          ...(scoreMin !== undefined || scoreMax !== undefined
             ? {
                 leadScore: {
-                  ...(input.scoreMin !== undefined && { gte: input.scoreMin }),
-                  ...(input.scoreMax !== undefined && { lte: input.scoreMax }),
+                  ...(scoreMin !== undefined && { gte: scoreMin }),
+                  ...(scoreMax !== undefined && { lte: scoreMax }),
                 },
               }
             : {}),

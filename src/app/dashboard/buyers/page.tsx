@@ -1,11 +1,18 @@
+import { redirect } from "next/navigation";
 import { Users } from "lucide-react";
+import { auth } from "@/lib/auth";
+import { BuyerDirectory } from "@/components/buyers/BuyerDirectory";
 
-export default function BuyersPage() {
+export default async function BuyersPage() {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+
   return (
     <div className="p-6">
-      <div className="flex items-center gap-3 mb-6">
+      {/* Page header */}
+      <div className="flex items-center gap-3 mb-5">
         <div
-          className="w-9 h-9 rounded-lg flex items-center justify-center"
+          className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
           style={{ backgroundColor: "#ECA134" }}
         >
           <Users size={18} className="text-white" />
@@ -13,20 +20,13 @@ export default function BuyersPage() {
         <div>
           <h1 className="text-xl font-bold text-foreground">Buyer Directory</h1>
           <p className="text-sm text-muted-foreground">
-            Direktori buyer potensial hasil pemindaian AI
+            Direktori buyer potensial hasil pemindaian AI Lead Agent
           </p>
         </div>
       </div>
 
-      <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center">
-        <Users size={32} className="mx-auto text-muted-foreground mb-3" />
-        <p className="text-sm font-medium text-foreground mb-1">
-          Modul Buyer Directory
-        </p>
-        <p className="text-xs text-muted-foreground">
-          Akan diimplementasi pada Task 9–12
-        </p>
-      </div>
+      {/* Directory table with filter, score badges, proposal actions */}
+      <BuyerDirectory userRole={session.user.role} />
     </div>
   );
 }
