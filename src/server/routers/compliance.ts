@@ -13,7 +13,7 @@ const CostingInputSchema = z.object({
 });
 
 export const complianceRouter = router({
-  // GET /api/compliance/checklist/:country
+  // GET /api/compliance/checklist/:country — Requirement 5.2: MRL, Phytosanitary, Customs, Organic
   getChecklist: protectedProcedure
     .input(
       z.object({
@@ -22,23 +22,30 @@ export const complianceRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      // TODO Task 14: implement with grouped categories
+      // Returns items ordered so MRL → phytosanitary → customs → organic_cert
       return ctx.db.complianceItem.findMany({
         where: {
           country: input.country,
-          ...(input.requirementType && { requirementType: input.requirementType }),
+          ...(input.requirementType !== undefined && { requirementType: input.requirementType }),
         },
         orderBy: { requirementType: "asc" },
       });
     }),
 
-  // GET /api/compliance/notifications
+  // GET /api/compliance/notifications — optionally filtered by country
   getRegulationNotifications: protectedProcedure
-    .input(z.object({ includeAcknowledged: z.boolean().optional() }))
+    .input(
+      z.object({
+        includeAcknowledged: z.boolean().optional(),
+        country: z.string().optional(),
+      })
+    )
     .query(async ({ ctx, input }) => {
-      // TODO Task 14: implement
       return ctx.db.regulationChangeNotification.findMany({
-        where: input.includeAcknowledged ? {} : { acknowledged: false },
+        where: {
+          ...(input.includeAcknowledged ? {} : { acknowledged: false }),
+          ...(input.country !== undefined && { country: input.country }),
+        },
         orderBy: { detectedAt: "desc" },
       });
     }),
