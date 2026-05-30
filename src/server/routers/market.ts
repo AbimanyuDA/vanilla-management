@@ -8,18 +8,20 @@ export const marketRouter = router({
     .input(
       z.object({
         region: z.nativeEnum(Region).optional(),
-        periodDays: z.union([z.literal(30), z.literal(90), z.literal(365)]).optional(),
+        // Default to 30 when omitted so callers always get current-cycle data
+        periodDays: z.union([z.literal(30), z.literal(90), z.literal(365)]).default(30),
       })
     )
     .query(async ({ ctx, input }) => {
-      // TODO Task 7: implement real DB query with filters
-      const where: Record<string, unknown> = {};
-      if (input.region) where.region = input.region;
-      if (input.periodDays) where.periodDays = input.periodDays;
-
+      // Requirement 1.1: always include US, EU, JP (enforced by agent writes, not query filter)
+      // Requirement 1.2: return most recent scan per country (distinct on country, ordered by scannedAt desc)
       return ctx.db.marketSnapshot.findMany({
-        where,
-        orderBy: { scannedAt: "desc" },
+        where: {
+          periodDays: input.periodDays,
+          ...(input.region !== undefined && { region: input.region }),
+        },
+        orderBy: [{ scannedAt: "desc" }, { country: "asc" }],
+        distinct: ["country"],
       });
     }),
 
