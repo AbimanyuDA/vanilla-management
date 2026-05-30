@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Roboto_Mono } from "next/font/google";
+import { TRPCProvider } from "@/components/providers/TRPCProvider";
 import "./globals.css";
 
 const inter = Inter({
@@ -30,7 +31,7 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${robotoMono.variable} font-sans antialiased`}
       >
-        {children}
+        <TRPCProvider>{children}</TRPCProvider>
       </body>
     </html>
   );
