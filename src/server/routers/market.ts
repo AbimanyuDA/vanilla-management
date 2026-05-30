@@ -25,19 +25,17 @@ export const marketRouter = router({
       });
     }),
 
-  // GET /api/market/competitors
+  // GET /api/market/competitors — sorted by spotPrice desc so highest-price country is first
   getCompetitors: protectedProcedure.query(async ({ ctx }) => {
-    // TODO Task 8: implement with staleness metadata
     return ctx.db.competitorData.findMany({
       orderBy: { spotPrice: "desc" },
     });
   }),
 
-  // GET /api/market/competitors/:country/history
+  // GET /api/market/competitors/:country/history — Property 7: only last 30 days
   getCompetitorHistory: protectedProcedure
     .input(z.object({ country: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
-      // TODO Task 8: filter to 30-day window
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
