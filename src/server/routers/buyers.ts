@@ -1,6 +1,23 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import { Resend } from "resend";
 import { router, protectedProcedure } from "@/lib/trpc";
 import { BuyerSector, ProposalStatus } from "@/generated/prisma/enums";
+import {
+  generateProposal,
+  serializeEmailDraft,
+  parseEmailDraft,
+} from "../../../ai-agents/lead-agent/generators/proposal-writer";
+
+// ─── Resend client (lazy — only initialised if RESEND_API_KEY is set) ─────────
+
+function getResendClient(): Resend | null {
+  const key = process.env.RESEND_API_KEY;
+  if (!key || key === "re_..." || key.length < 10) return null;
+  return new Resend(key);
+}
+
+// ─── Router ───────────────────────────────────────────────────────────────────
 
 export const buyersRouter = router({
   // GET /api/buyers?country=&sector=&score_min=&score_max=
@@ -32,73 +49,168 @@ export const buyersRouter = router({
       });
     }),
 
-  // POST /api/buyers/:id/generate-proposal
+  // POST /api/buyers/:id/generate-proposal — Requirement 4.2: ≤30 second timeout
   generateProposal: protectedProcedure
-    .input(z.object({ buyerId: z.string().cuid() }))
+    .input(z.object({ buyerId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      // TODO Task 10: call proposal-writer AI agent, return draft
       const buyer = await ctx.db.buyer.findUniqueOrThrow({
         where: { id: input.buyerId },
       });
 
-      // Placeholder draft — replaced by AI-generated content in Task 10
+      // Generate proposal with a hard 28-second timeout (Requirement 4.2 allows 30s)
+      const proposal = await Promise.race([
+        generateProposal({
+          companyName: buyer.companyName,
+          country: buyer.country,
+          sector: buyer.sector,
+          importVolumeHistorical: buyer.importVolumeHistorical,
+          emailBusiness: buyer.emailBusiness,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new TRPCError({ code: "TIMEOUT", message: "Proposal generation timed out after 28 seconds" })),
+            28_000
+          )
+        ),
+      ]);
+
+      // Persist as DRAFT (Requirement 4.4: preview before send)
       const draft = await ctx.db.proposal.create({
         data: {
           buyerId: buyer.id,
           generatedById: ctx.session.user.id,
-          quotationSheetDraft: `[Quotation for ${buyer.companyName} — to be generated]`,
-          emailDraft: `[Email to ${buyer.companyName} — to be generated]`,
+          quotationSheetDraft: proposal.quotationSheet,
+          emailDraft: serializeEmailDraft(proposal), // JSON: { subject, body }
           status: ProposalStatus.DRAFT,
         },
       });
 
-      return draft;
+      // Return with parsed fields for convenient UI consumption
+      return {
+        ...draft,
+        emailSubject: proposal.subject,
+        emailBody: proposal.emailBody,
+      };
     }),
 
-  // POST /api/buyers/:id/send-proposal
+  // POST /api/buyers/:id/send-proposal — Requirement 4.5: send + persist sentAt
   sendProposal: protectedProcedure
     .input(
       z.object({
-        proposalId: z.string().cuid(),
-        emailDraft: z.string().optional(),
-        quotationDraft: z.string().optional(),
+        proposalId: z.string().min(1),
+        // Optional overrides: user may have edited the draft in the preview modal
+        emailDraftOverride: z.string().optional(),
+        quotationDraftOverride: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // TODO Task 10: send via Resend, update status
       const proposal = await ctx.db.proposal.findUniqueOrThrow({
         where: { id: input.proposalId },
         include: { buyer: true },
       });
 
+      // Requirement 4.5: buyer must have an email
       if (!proposal.buyer.emailBusiness) {
-        return { success: false, error: "Buyer email belum terverifikasi" };
+        return {
+          success: false as const,
+          error: "Buyer email belum tersedia. Tidak dapat mengirim proposal.",
+        };
       }
 
-      // Placeholder — actual send implemented in Task 10
-      await ctx.db.proposal.update({
-        where: { id: input.proposalId },
-        data: {
-          status: ProposalStatus.FAILED,
-          failureReason: "Email service not yet configured",
-        },
-      });
+      // Apply any edits made in the preview modal
+      const emailRaw = input.emailDraftOverride ?? proposal.emailDraft;
+      const quotationRaw = input.quotationDraftOverride ?? proposal.quotationSheetDraft;
+      const { subject, body } = parseEmailDraft(emailRaw);
 
-      return { success: false, error: "Email service not yet configured" };
+      // Check Resend is configured
+      const resend = getResendClient();
+      if (!resend) {
+        // Gracefully record as FAILED with a clear reason (Requirement 4.6)
+        await ctx.db.proposal.update({
+          where: { id: input.proposalId },
+          data: {
+            status: ProposalStatus.FAILED,
+            failureReason: "RESEND_API_KEY not configured. Set it in .env to enable email delivery.",
+            emailDraft: emailRaw,
+            quotationSheetDraft: quotationRaw,
+          },
+        });
+        return {
+          success: false as const,
+          error: "Email service not configured (RESEND_API_KEY missing).",
+        };
+      }
+
+      const fromEmail =
+        process.env.RESEND_FROM_EMAIL ?? "proposals@vanillaindonesia.com";
+
+      try {
+        // Compose HTML email with quotation sheet appended
+        const htmlBody = `
+<div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
+  ${body.replace(/\n/g, "<br />")}
+  <hr style="margin: 32px 0; border-color: #e5e7eb;" />
+  <h2 style="color: #ECA134;">Attached Quotation</h2>
+  <pre style="background: #f8f9fa; padding: 16px; border-radius: 8px; white-space: pre-wrap; font-size: 13px;">${quotationRaw}</pre>
+</div>`;
+
+        const { data, error } = await resend.emails.send({
+          from: fromEmail,
+          to: proposal.buyer.emailBusiness,
+          subject,
+          html: htmlBody,
+          tags: [
+            { name: "proposalId", value: proposal.id },
+            { name: "buyerCompany", value: proposal.buyer.companyName },
+          ],
+        });
+
+        if (error || !data?.id) {
+          throw new Error(error?.message ?? "Unknown Resend error");
+        }
+
+        // Requirement 4.5: record SENT + sentAt
+        await ctx.db.proposal.update({
+          where: { id: input.proposalId },
+          data: {
+            status: ProposalStatus.SENT,
+            sentAt: new Date(),
+            emailDraft: emailRaw,
+            quotationSheetDraft: quotationRaw,
+            failureReason: null,
+          },
+        });
+
+        return { success: true as const, emailId: data.id };
+      } catch (err) {
+        const failureReason = (err as Error).message;
+
+        // Requirement 4.6: FAILED status + preserve draft for retry
+        await ctx.db.proposal.update({
+          where: { id: input.proposalId },
+          data: {
+            status: ProposalStatus.FAILED,
+            failureReason,
+            emailDraft: emailRaw,
+            quotationSheetDraft: quotationRaw,
+          },
+        });
+
+        return { success: false as const, error: failureReason };
+      }
     }),
 
   // GET /api/buyers/:id/proposals
   getProposals: protectedProcedure
-    .input(z.object({ buyerId: z.string().cuid() }))
+    .input(z.object({ buyerId: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
-      // TODO Task 11: implement with pagination
       return ctx.db.proposal.findMany({
         where: { buyerId: input.buyerId },
         orderBy: { createdAt: "desc" },
       });
     }),
 
-  // GET /api/buyers/proposals/history
+  // GET /api/buyers/proposals/history (Requirement 4.7: retrievable history)
   getProposalHistory: protectedProcedure
     .input(
       z.object({
@@ -107,10 +219,12 @@ export const buyersRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      // TODO Task 11: implement with buyer info joined
       return ctx.db.proposal.findMany({
         where: input.status ? { status: input.status } : {},
-        include: { buyer: { select: { companyName: true, country: true } } },
+        include: {
+          buyer: { select: { companyName: true, country: true } },
+          generatedBy: { select: { name: true } },
+        },
         orderBy: { createdAt: "desc" },
         take: input.limit,
       });
