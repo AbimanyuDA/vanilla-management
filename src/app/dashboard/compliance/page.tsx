@@ -1,5 +1,6 @@
 import { ShieldCheck } from "lucide-react";
 import { ComplianceChecklist } from "@/components/compliance/ComplianceChecklist";
+import { CostingMatrix } from "@/components/compliance/CostingMatrix";
 
 export default function CompliancePage() {
   return (
@@ -22,6 +23,9 @@ export default function CompliancePage() {
 
       {/* Compliance Checklist with country selector and change notifications */}
       <ComplianceChecklist />
+
+      {/* Costing Matrix — FOB/CFR/CIF calculator (Requirements 6.1–6.7) */}
+      <CostingMatrix />
     </div>
   );
 }
