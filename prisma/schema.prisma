@@ -1,7 +1,5 @@
-// This is your Prisma schema file,
+// Vanilla Export Intelligence Platform (VEIP) — Prisma Schema
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
   provider = "prisma-client"
@@ -10,4 +8,240 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// =============================================================================
+// Enums
+// =============================================================================
+
+enum Role {
+  EKSEKUTIF
+  SALES_MANAGER
+  DIREKTUR_KEUANGAN
+}
+
+enum Region {
+  ASIA_PACIFIC
+  EUROPE
+  AMERICAS
+}
+
+enum BuyerSector {
+  FOOD_BEVERAGE
+  DISTRIBUTOR
+  IMPORTER
+}
+
+enum ProposalStatus {
+  DRAFT
+  SENT
+  FAILED
+}
+
+enum AgentType {
+  MARKET_AGENT
+  LEAD_AGENT
+  COMPLIANCE_AGENT
+}
+
+enum RunStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+// =============================================================================
+// Models
+// =============================================================================
+
+/// Platform users with role-based access control
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  name         String
+  role         Role
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  lastActiveAt DateTime?
+
+  proposals Proposal[]
+
+  @@map("users")
+}
+
+/// Snapshot of import quota and demand data per target country
+model MarketSnapshot {
+  id               String   @id @default(cuid())
+  country          String
+  region           Region
+  importQuotaTons  Float
+  demandGrowthPct  Float    // % demand growth
+  periodDays       Int      // 30 | 90 | 365
+  scannedAt        DateTime @default(now())
+  createdAt        DateTime @default(now())
+
+  @@index([country])
+  @@index([region])
+  @@index([scannedAt])
+  @@map("market_snapshots")
+}
+
+/// Live competitor data per country (Madagascar, Uganda, Papua New Guinea)
+model CompetitorData {
+  id                          String   @id @default(cuid())
+  country                     String   @unique
+  spotPrice                   Float    // USD/kg
+  spotPricePrevious           Float    // USD/kg — previous value for % change calc
+  harvestQualityEstimate      String   // "low" | "medium" | "high"
+  logisticsIssueActive        Boolean  @default(false)
+  logisticsIssueDescription   String?
+  updatedAt                   DateTime @updatedAt
+  createdAt                   DateTime @default(now())
+
+  priceHistory SpotPriceHistory[]
+
+  @@index([country])
+  @@map("competitor_data")
+}
+
+/// Historical spot price records for chart rendering (30-day window)
+model SpotPriceHistory {
+  id                String         @id @default(cuid())
+  competitorCountry String
+  spotPrice         Float
+  recordedAt        DateTime       @default(now())
+
+  competitor CompetitorData @relation(fields: [competitorCountry], references: [country])
+
+  @@index([competitorCountry])
+  @@index([recordedAt])
+  @@map("spot_price_history")
+}
+
+/// Market gap alerts generated when demand surge vs supply drop exceeds 10%
+model GapAlert {
+  id                 String   @id @default(cuid())
+  targetCountry      String
+  demandSurgePct     Float
+  competitorCountry  String
+  supplyDropPct      Float
+  detectedAt         DateTime @default(now())
+  acknowledged       Boolean  @default(false)
+  acknowledgedAt     DateTime?
+
+  @@index([targetCountry])
+  @@index([acknowledged])
+  @@map("gap_alerts")
+}
+
+/// Potential buyer records discovered and scored by Lead_Agent
+model Buyer {
+  id                      String      @id @default(cuid())
+  companyName             String
+  country                 String
+  sector                  BuyerSector
+  leadScore               Int         // 0–100
+  emailBusiness           String?
+  emailVerified           Boolean     @default(false)
+  importVolumeHistorical  Float?      // tonnes/year
+  scannedAt               DateTime    @default(now())
+  directoryUpdatedAt      DateTime    @updatedAt
+  createdAt               DateTime    @default(now())
+
+  proposals Proposal[]
+
+  @@index([country])
+  @@index([sector])
+  @@index([leadScore])
+  @@map("buyers")
+}
+
+/// Proposal drafts and send history per buyer
+model Proposal {
+  id                   String         @id @default(cuid())
+  buyerId              String
+  generatedById        String?        // User who triggered generation
+  quotationSheetDraft  String         @db.Text
+  emailDraft           String         @db.Text
+  status               ProposalStatus @default(DRAFT)
+  sentAt               DateTime?
+  failureReason        String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  buyer         Buyer  @relation(fields: [buyerId], references: [id])
+  generatedBy   User?  @relation(fields: [generatedById], references: [id])
+
+  @@index([buyerId])
+  @@index([status])
+  @@map("proposals")
+}
+
+/// Compliance requirements per destination country (MRL, phytosanitary, customs, organic)
+model ComplianceItem {
+  id               String   @id @default(cuid())
+  country          String
+  requirementType  String   // "mrl" | "phytosanitary" | "customs" | "organic_cert"
+  description      String
+  currentValue     String
+  previousValue    String?
+  sourceUrl        String
+  updatedAt        DateTime @updatedAt
+  createdAt        DateTime @default(now())
+
+  @@index([country])
+  @@index([requirementType])
+  @@map("compliance_items")
+}
+
+/// Regulation change notifications detected by Compliance_Agent
+model RegulationChangeNotification {
+  id              String   @id @default(cuid())
+  country         String
+  regulationName  String
+  oldValue        String
+  newValue        String
+  detectedAt      DateTime @default(now())
+  acknowledged    Boolean  @default(false)
+
+  @@index([country])
+  @@index([acknowledged])
+  @@map("regulation_change_notifications")
+}
+
+/// Ocean freight rates per route, updated every 24h by Compliance_Agent
+model FreightRate {
+  id                String   @id @default(cuid())
+  originPort        String
+  destinationPort   String
+  destinationCountry String
+  containerType     String   // "20ft" | "40ft" | "LCL"
+  rateUsd           Float    // USD per container
+  currency          String   @default("USD")
+  validFrom         DateTime
+  validUntil        DateTime?
+  updatedAt         DateTime @updatedAt
+  createdAt         DateTime @default(now())
+
+  @@unique([originPort, destinationPort, containerType])
+  @@index([destinationCountry])
+  @@index([containerType])
+  @@map("freight_rates")
+}
+
+/// Execution log for all AI Agent runs (success, failure, metadata)
+model AgentRunLog {
+  id          String    @id @default(cuid())
+  agentType   AgentType
+  status      RunStatus
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  errorMessage String?
+  metadata    Json?     // arbitrary run metadata (records processed, sources hit, etc.)
+
+  @@index([agentType])
+  @@index([status])
+  @@index([startedAt])
+  @@map("agent_run_logs")
 }
