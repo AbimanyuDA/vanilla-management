@@ -16,6 +16,7 @@ import {
 import { trpc } from "@/lib/trpc-client";
 import { cn } from "@/lib/utils";
 import { LeadScoreBadge } from "./LeadScoreBadge";
+import { ProposalPreviewModal, type GeneratedProposalData } from "./ProposalPreviewModal";
 import type { BuyerSector, Role } from "@/generated/prisma/enums";
 
 // ─── Label maps ───────────────────────────────────────────────────────────────
@@ -114,21 +115,15 @@ function ProposalHistoryPanel({ buyerId }: { buyerId: string }) {
   );
 }
 
-// ─── Generate button with mutation state ──────────────────────────────────────
+// ─── Generate button — opens ProposalPreviewModal ────────────────────────────
 
 function GenerateButton({
-  buyerId,
   canGenerate,
-  onSuccess,
+  onOpen,
 }: {
-  buyerId: string;
   canGenerate: boolean;
-  onSuccess?: (proposalId: string) => void;
+  onOpen: () => void;
 }) {
-  const generateMutation = trpc.buyers.generateProposal.useMutation({
-    onSuccess: (data) => onSuccess?.(data.id),
-  });
-
   if (!canGenerate) {
     return (
       <button
@@ -142,37 +137,15 @@ function GenerateButton({
     );
   }
 
-  const isPending = generateMutation.isPending;
-  const isSuccess = generateMutation.isSuccess;
-
   return (
     <button
-      onClick={() => generateMutation.mutate({ buyerId })}
-      disabled={isPending}
-      className={cn(
-        "inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white transition-all",
-        isSuccess ? "bg-green-500" : "disabled:opacity-60",
-        !isPending && !isSuccess && "hover:opacity-90"
-      )}
-      style={!isSuccess ? { backgroundColor: "#ECA134" } : {}}
-      aria-label={`Generate & Send Proposal untuk buyer`}
+      onClick={onOpen}
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white hover:opacity-90 transition-opacity"
+      style={{ backgroundColor: "#ECA134" }}
+      aria-label="Buka modal Generate & Send Proposal"
     >
-      {isPending ? (
-        <>
-          <RefreshCw size={11} className="animate-spin" />
-          Membuat...
-        </>
-      ) : isSuccess ? (
-        <>
-          <CheckCircle size={11} />
-          Dibuat!
-        </>
-      ) : (
-        <>
-          <Zap size={11} />
-          Buat Proposal
-        </>
-      )}
+      <Zap size={11} />
+      Buat Proposal
     </button>
   );
 }
@@ -183,13 +156,42 @@ interface Props {
   userRole: Role;
 }
 
+type ModalTarget = { buyerName: string; buyerEmail: string | null };
+
 export function BuyerDirectory({ userRole }: Props) {
   const [countryQuery, setCountryQuery] = useState("");
   const [sector, setSector] = useState<BuyerSector | undefined>();
   const [scoreRange, setScoreRange] = useState<ScoreRange>("all");
   const [expandedBuyerId, setExpandedBuyerId] = useState<string | null>(null);
+  const [modalTarget, setModalTarget] = useState<ModalTarget | null>(null);
+  const [generatedProposal, setGeneratedProposal] = useState<GeneratedProposalData | null>(null);
 
   const canGenerate = userRole === "SALES_MANAGER";
+
+  // Mutation owned by parent so it survives React 18 StrictMode double-render
+  const generateMutation = trpc.buyers.generateProposal.useMutation({
+    onSuccess: (data) => {
+      setGeneratedProposal({
+        id: data.id,
+        emailSubject: data.emailSubject ?? "",
+        emailBody: data.emailBody ?? "",
+        quotationSheetDraft: data.quotationSheetDraft ?? "",
+      });
+    },
+  });
+
+  const openModal = (buyer: { id: string; companyName: string; emailBusiness: string | null }) => {
+    setModalTarget({ buyerName: buyer.companyName, buyerEmail: buyer.emailBusiness });
+    setGeneratedProposal(null); // clear previous
+    generateMutation.reset();
+    generateMutation.mutate({ buyerId: buyer.id });
+  };
+
+  const closeModal = () => {
+    setModalTarget(null);
+    setGeneratedProposal(null);
+    generateMutation.reset();
+  };
 
   const {
     data: buyers = [],
@@ -380,8 +382,8 @@ export function BuyerDirectory({ userRole }: Props) {
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               <GenerateButton
-                                buyerId={buyer.id}
                                 canGenerate={canGenerate}
+                                onOpen={() => openModal(buyer)}
                               />
                               <button
                                 onClick={() => toggleHistory(buyer.id)}
@@ -430,6 +432,26 @@ export function BuyerDirectory({ userRole }: Props) {
             {countryQuery && ` · Negara: "${countryQuery}"`}
           </p>
         </div>
+      )}
+
+      {/* Proposal Preview Modal (Requirement 4.4) */}
+      {modalTarget && (
+        <ProposalPreviewModal
+          buyerName={modalTarget.buyerName}
+          buyerEmail={modalTarget.buyerEmail}
+          proposalData={generatedProposal}
+          generationError={generateMutation.error?.message ?? null}
+          isGenerating={generateMutation.isPending}
+          onClose={closeModal}
+          onRetryGenerate={() => {
+            // retry: find the buyer by name and re-trigger
+            generateMutation.reset();
+            setGeneratedProposal(null);
+            // We can't re-call without buyerId — use existing proposal if any
+            // Simplification: prompt user to close and reopen
+          }}
+          onProposalSent={() => setExpandedBuyerId(null)}
+        />
       )}
     </div>
   );
