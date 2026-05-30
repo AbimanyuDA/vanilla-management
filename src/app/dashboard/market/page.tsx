@@ -1,6 +1,7 @@
 import { TrendingUp } from "lucide-react";
 import { GapAlertBanner } from "@/components/market/GapAlertBanner";
 import { ImportQuotaTable } from "@/components/market/ImportQuotaTable";
+import { CompetitorBoard } from "@/components/market/CompetitorBoard";
 
 export default function MarketPage() {
   return (
@@ -26,6 +27,9 @@ export default function MarketPage() {
 
       {/* Import quota table with filters (Requirements 1.1, 1.2, 1.6) */}
       <ImportQuotaTable />
+
+      {/* Competitor Live Insight Board (Requirements 2.1–2.6) */}
+      <CompetitorBoard />
     </div>
   );
 }
