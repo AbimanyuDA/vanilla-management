@@ -93,18 +93,20 @@ export function AgentStatusBar({ user }: { user: UserInfo }) {
                   ? "#EF4444"
                   : "#9CA3AF";
 
+              const statusText = isActive
+                ? `${agent.label} Agent sedang berjalan`
+                : hasFailed
+                  ? `${agent.label} Agent gagal: ${status?.lastError}`
+                  : `${agent.label} Agent idle — ${formatRelativeTime(lastRun)}`;
+
               return (
-                <span
+                <div
                   key={agent.type}
-                  title={
-                    isActive
-                      ? `${agent.label} Agent sedang berjalan`
-                      : hasFailed
-                        ? `${agent.label} Agent gagal: ${status?.lastError}`
-                        : `${agent.label} Agent idle — ${formatRelativeTime(lastRun)}`
-                  }
+                  tabIndex={0}
+                  aria-label={statusText}
+                  title={statusText}
                   className={cn(
-                    "inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium transition-colors cursor-default select-none",
+                    "inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium transition-colors cursor-default select-none focus-ring",
                     colorClass
                   )}
                 >
@@ -116,7 +118,7 @@ export function AgentStatusBar({ user }: { user: UserInfo }) {
                     style={{ backgroundColor: dotColor }}
                   />
                   {agent.label}
-                </span>
+                </div>
               );
             })}
       </div>

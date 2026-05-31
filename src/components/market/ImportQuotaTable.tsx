@@ -113,8 +113,7 @@ export function ImportQuotaTable() {
               e.target.value ? (e.target.value as Region) : undefined
             )
           }
-          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-foreground focus:outline-none focus:ring-2"
-          style={{ "--tw-ring-color": "#ECA134" } as React.CSSProperties}
+          className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-foreground focus-ring"
           aria-label="Filter wilayah"
         >
           <option value="">Semua Wilayah</option>
@@ -134,7 +133,7 @@ export function ImportQuotaTable() {
               key={value}
               onClick={() => setSelectedPeriod(value)}
               className={cn(
-                "px-3 py-1.5 text-xs font-medium transition-colors",
+                "px-3 py-1.5 text-xs font-medium transition-colors focus-ring",
                 selectedPeriod === value
                   ? "text-white"
                   : "text-muted-foreground hover:bg-gray-50"
@@ -156,7 +155,7 @@ export function ImportQuotaTable() {
           onClick={() => refetch()}
           disabled={isFetching}
           aria-label="Refresh data"
-          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-gray-50 transition-colors disabled:opacity-50"
+          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-gray-50 transition-colors disabled:opacity-50 focus-ring"
         >
           <RefreshCw size={14} className={isFetching ? "animate-spin" : ""} />
         </button>
@@ -167,19 +166,19 @@ export function ImportQuotaTable() {
         <table className="w-full text-sm" aria-label="Tabel kuota impor vanilla">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100 text-left">
-              <th className="px-4 py-3 font-semibold text-foreground text-xs uppercase tracking-wide">
+              <th scope="col" className="px-4 py-3 font-semibold text-foreground text-xs uppercase tracking-wide">
                 Negara Tujuan
               </th>
-              <th className="px-4 py-3 font-semibold text-foreground text-xs uppercase tracking-wide">
+              <th scope="col" className="px-4 py-3 font-semibold text-foreground text-xs uppercase tracking-wide">
                 Wilayah
               </th>
-              <th className="px-4 py-3 font-semibold text-foreground text-xs uppercase tracking-wide text-right">
+              <th scope="col" className="px-4 py-3 font-semibold text-foreground text-xs uppercase tracking-wide text-right">
                 Kuota Impor (MT)
               </th>
-              <th className="px-4 py-3 font-semibold text-foreground text-xs uppercase tracking-wide text-right">
+              <th scope="col" className="px-4 py-3 font-semibold text-foreground text-xs uppercase tracking-wide text-right">
                 Pertumbuhan Permintaan
               </th>
-              <th className="px-4 py-3 font-semibold text-foreground text-xs uppercase tracking-wide">
+              <th scope="col" className="px-4 py-3 font-semibold text-foreground text-xs uppercase tracking-wide">
                 Status
               </th>
             </tr>

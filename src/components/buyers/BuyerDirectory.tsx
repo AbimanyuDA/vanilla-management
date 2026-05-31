@@ -140,7 +140,7 @@ function GenerateButton({
   return (
     <button
       onClick={onOpen}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white hover:opacity-90 transition-opacity"
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white hover:opacity-90 transition-opacity focus-ring"
       style={{ backgroundColor: "#ECA134" }}
       aria-label="Buka modal Generate & Send Proposal"
     >
@@ -239,8 +239,7 @@ export function BuyerDirectory({ userRole }: Props) {
             placeholder="Filter negara..."
             value={countryQuery}
             onChange={(e) => setCountryQuery(e.target.value)}
-            className="pl-7 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 w-36"
-            style={{ "--tw-ring-color": "#ECA134" } as React.CSSProperties}
+            className="pl-7 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus-ring w-36"
             aria-label="Filter berdasarkan negara"
           />
         </div>
@@ -249,8 +248,7 @@ export function BuyerDirectory({ userRole }: Props) {
         <select
           value={sector ?? ""}
           onChange={(e) => setSector((e.target.value as BuyerSector) || undefined)}
-          className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2"
-          style={{ "--tw-ring-color": "#ECA134" } as React.CSSProperties}
+          className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 focus-ring"
           aria-label="Filter sektor industri"
         >
           <option value="">Semua Sektor</option>
@@ -267,7 +265,7 @@ export function BuyerDirectory({ userRole }: Props) {
               onClick={() => setScoreRange(value)}
               aria-pressed={scoreRange === value}
               className={cn(
-                "px-2.5 py-1.5 text-[11px] font-medium transition-colors",
+                "px-2.5 py-1.5 text-[11px] font-medium transition-colors focus-ring",
                 scoreRange === value ? "text-white" : "text-muted-foreground hover:bg-gray-50"
               )}
               style={scoreRange === value ? { backgroundColor: "#ECA134" } : {}}
@@ -281,7 +279,7 @@ export function BuyerDirectory({ userRole }: Props) {
           onClick={() => refetch()}
           disabled={isFetching}
           aria-label="Refresh daftar buyer"
-          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-gray-50 transition-colors disabled:opacity-50"
+          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-gray-50 transition-colors disabled:opacity-50 focus-ring"
         >
           <RefreshCw size={13} className={isFetching ? "animate-spin" : ""} />
         </button>
@@ -292,12 +290,12 @@ export function BuyerDirectory({ userRole }: Props) {
         <table className="w-full text-sm" aria-label="Tabel buyer directory">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100 text-left">
-              <th className="px-4 py-3 text-xs font-semibold text-foreground uppercase tracking-wide">Perusahaan</th>
-              <th className="px-4 py-3 text-xs font-semibold text-foreground uppercase tracking-wide">Negara</th>
-              <th className="px-4 py-3 text-xs font-semibold text-foreground uppercase tracking-wide">Sektor</th>
-              <th className="px-4 py-3 text-xs font-semibold text-foreground uppercase tracking-wide">Lead Score</th>
-              <th className="px-4 py-3 text-xs font-semibold text-foreground uppercase tracking-wide">Email</th>
-              <th className="px-4 py-3 text-xs font-semibold text-foreground uppercase tracking-wide">Aksi</th>
+              <th scope="col" className="px-4 py-3 text-xs font-semibold text-foreground uppercase tracking-wide">Perusahaan</th>
+              <th scope="col" className="px-4 py-3 text-xs font-semibold text-foreground uppercase tracking-wide">Negara</th>
+              <th scope="col" className="px-4 py-3 text-xs font-semibold text-foreground uppercase tracking-wide">Sektor</th>
+              <th scope="col" className="px-4 py-3 text-xs font-semibold text-foreground uppercase tracking-wide">Lead Score</th>
+              <th scope="col" className="px-4 py-3 text-xs font-semibold text-foreground uppercase tracking-wide">Email</th>
+              <th scope="col" className="px-4 py-3 text-xs font-semibold text-foreground uppercase tracking-wide">Aksi</th>
             </tr>
           </thead>
 
@@ -389,7 +387,7 @@ export function BuyerDirectory({ userRole }: Props) {
                                 onClick={() => toggleHistory(buyer.id)}
                                 aria-label={`Riwayat proposal untuk ${buyer.companyName}`}
                                 aria-expanded={isExpanded}
-                                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-gray-100 transition-colors"
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-gray-100 transition-colors focus-ring"
                                 title="Riwayat proposal"
                               >
                                 {isExpanded ? (

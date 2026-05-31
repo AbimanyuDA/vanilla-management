@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "@/lib/trpc";
 import { TRPCError } from "@trpc/server";
+import { generateCostingPdf } from "@/lib/export/pdf-template";
+import { generateCostingXlsx } from "@/lib/export/xlsx-template";
 
 const ContainerTypeSchema = z.enum(["20ft", "40ft", "LCL"]);
 const RequirementTypeSchema = z.enum(["mrl", "phytosanitary", "customs", "organic_cert"]);
@@ -186,18 +188,87 @@ export const complianceRouter = router({
       };
     }),
 
-  // POST /api/compliance/export (PDF or XLSX)
+  // POST /api/compliance/export (PDF or XLSX) — Task 16
+  // Property 16: export must contain all cost components and FOB/CFR/CIF values
   exportCostMatrix: protectedProcedure
     .input(
       CostingInputSchema.extend({
         format: z.enum(["pdf", "xlsx"]),
       })
     )
-    .mutation(async () => {
-      // TODO Task 16: implement PDF/XLSX export
-      throw new TRPCError({
-        code: "NOT_IMPLEMENTED" as never,
-        message: "Export akan diimplementasi pada Task 16",
+    .mutation(async ({ ctx, input }) => {
+      // Re-run the same FOB→CIF calculation as calculateCost
+      const freightRate = await ctx.db.freightRate.findFirst({
+        where: {
+          destinationCountry: input.destinationCountry,
+          containerType: input.containerType,
+        },
+        orderBy: { updatedAt: "desc" },
       });
+
+      if (!freightRate) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `Tarif Ocean Freight untuk rute ${input.destinationCountry} (${input.containerType}) tidak tersedia. Pilih negara dengan tarif tersedia untuk export.`,
+        });
+      }
+
+      // Domestic costs
+      const vanillaHPP = input.hppPerKg * input.volumeKg;
+      const dryingCost = vanillaHPP * 0.05;
+      const vacuumPackagingCost = input.volumeKg * 2;
+      const truckToPortCost = 500;
+      const emklCost = 300;
+      const localDocumentCost = 150;
+      const domesticSubtotal =
+        vanillaHPP + dryingCost + vacuumPackagingCost + truckToPortCost + emklCost + localDocumentCost;
+
+      // Freight costs
+      const oceanFreightRate = freightRate.rateUsd;
+      const marineInsurance = domesticSubtotal * 0.005;
+      const freightSubtotal = oceanFreightRate + marineInsurance;
+
+      // Destination costs
+      const importDuty = domesticSubtotal * 0.05;
+      const portTax = 200;
+      const customsClearance = 350;
+      const destinationSubtotal = importDuty + portTax + customsClearance;
+
+      // FOB / CFR / CIF (Property 14 invariant)
+      const fob = domesticSubtotal;
+      const cfr = fob + oceanFreightRate;
+      const cif = cfr + marineInsurance;
+
+      const costData = {
+        input,
+        domestic: { vanillaHPP, dryingCost, vacuumPackagingCost, truckToPortCost, emklCost, localDocumentCost, subtotal: domesticSubtotal },
+        freight: { oceanFreightRate, marineInsurance, subtotal: freightSubtotal },
+        destination: { importDuty, portTax, customsClearance, subtotal: destinationSubtotal },
+        fob,
+        cfr,
+        cif,
+        calculatedAt: new Date(),
+        freightRateUpdatedAt: freightRate.updatedAt,
+      };
+
+      const filename = `costing-matrix-${input.destinationCountry.toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().slice(0, 10)}`;
+
+      if (input.format === "pdf") {
+        const pdfBuffer = await generateCostingPdf(costData);
+        return {
+          format: "pdf" as const,
+          base64: pdfBuffer.toString("base64"),
+          filename: `${filename}.pdf`,
+          mimeType: "application/pdf",
+        };
+      } else {
+        const xlsxBuffer = generateCostingXlsx(costData);
+        return {
+          format: "xlsx" as const,
+          base64: xlsxBuffer.toString("base64"),
+          filename: `${filename}.xlsx`,
+          mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        };
+      }
     }),
 });
