@@ -73,7 +73,7 @@ export function Sidebar({ role, userName }: Props) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto" aria-label="Navigasi Utama">
         <p className="px-2 mb-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
           Modul
         </p>
@@ -86,8 +86,9 @@ export function Sidebar({ role, userName }: Props) {
             <Link
               key={item.href}
               href={item.href}
+              aria-current={isActive ? "page" : undefined}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group",
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group focus-ring",
                 isActive
                   ? "text-foreground bg-orange-50"
                   : "text-muted-foreground hover:text-foreground hover:bg-gray-50"
@@ -128,7 +129,7 @@ export function Sidebar({ role, userName }: Props) {
         </div>
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-gray-50 transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-gray-50 transition-colors focus-ring"
         >
           <LogOut size={15} />
           Keluar

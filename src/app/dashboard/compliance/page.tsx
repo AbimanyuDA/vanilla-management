@@ -1,8 +1,18 @@
+import { redirect } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
+import { auth } from "@/lib/auth";
+import { canAccess } from "@/lib/permissions";
 import { ComplianceChecklist } from "@/components/compliance/ComplianceChecklist";
 import { CostingMatrix } from "@/components/compliance/CostingMatrix";
 
-export default function CompliancePage() {
+export default async function CompliancePage() {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+
+  if (!canAccess(session.user.role, "compliance", "read")) {
+    redirect("/dashboard/market");
+  }
+
   return (
     <div className="p-6">
       {/* Page header */}

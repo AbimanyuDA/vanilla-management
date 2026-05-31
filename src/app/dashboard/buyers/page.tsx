@@ -1,11 +1,16 @@
 import { redirect } from "next/navigation";
 import { Users } from "lucide-react";
 import { auth } from "@/lib/auth";
+import { canAccess } from "@/lib/permissions";
 import { BuyerDirectory } from "@/components/buyers/BuyerDirectory";
 
 export default async function BuyersPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
+
+  if (!canAccess(session.user.role, "buyers", "read")) {
+    redirect("/dashboard/market");
+  }
 
   return (
     <div className="p-6">

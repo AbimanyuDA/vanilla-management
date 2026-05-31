@@ -59,4 +59,30 @@
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
+
+  /* Skeleton shimmer animation for loading states (Task 18) */
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      #e5e7eb 25%,
+      #f3f4f6 50%,
+      #e5e7eb 75%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  }
+
+  /* Consistent focus ring for keyboard accessibility (Task 18) */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-[#ECA134] focus:ring-offset-2;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
